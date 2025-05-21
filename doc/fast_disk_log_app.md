@@ -32,7 +32,7 @@ start() -&gt; ok
 ### start/2 ###
 
 <pre><code>
-start(StartType::<a href="application.md#type-start_type">application:start_type()</a>, StartArgs::term()) -&gt; {ok, pid()}
+start(StartType::<a href="http://www.erlang.org/doc/man/application.html#type-start_type">application:start_type()</a>, StartArgs::term()) -&gt; {ok, pid()}
 </code></pre>
 <br />
 

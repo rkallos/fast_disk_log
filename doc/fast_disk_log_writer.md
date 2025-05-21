@@ -16,7 +16,7 @@
 
 
 <pre><code>
-filename() = <a href="file.md#type-name_all">file:name_all()</a>
+filename() = <a href="http://www.erlang.org/doc/man/file.html#type-name_all">file:name_all()</a>
 </code></pre>
 
 
