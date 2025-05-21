@@ -2,8 +2,14 @@
 -include("fast_disk_log.hrl").
 
 -export([
-    init/5,
     start_link/4
+]).
+
+-behaviour(metal).
+
+-export([
+    handle_msg/2,
+    init/3
 ]).
 
 -record(state, {
@@ -15,51 +21,10 @@
     write_count = 0
 }).
 
+-type state() :: #state{}.
+
 %% public
--spec init(pid(), atom(), name(), filename(), open_options()) -> ok | no_return().
-
-init(Parent, Name, Logger, Filename, Opts) ->
-    case file:open(Filename, [append, raw]) of
-        {ok, Fd} ->
-            register(Name, self()),
-            proc_lib:init_ack(Parent, {ok, self()}),
-
-            State = #state {
-                name = Name,
-                fd = Fd,
-                logger = Logger
-            },
-
-            case ?LOOKUP(auto_close, Opts, ?DEFAULT_AUTO_CLOSE) of
-                true ->
-                    AutoCloseDelay = ?ENV(max_delay, ?DEFAULT_MAX_DELAY) * 2,
-                    loop(State#state {
-                        timer_delay = AutoCloseDelay,
-                        timer_ref = new_timer(AutoCloseDelay, auto_close)
-                    });
-                false ->
-                    loop(State)
-            end;
-        {error, Reason} ->
-            ?ERROR_MSG("failed to open file: ~p ~p~n", [Reason, Filename]),
-            ok
-    end.
-
--spec start_link(atom(), name(), filename(), open_options()) -> {ok, pid()}.
-
-start_link(Name, Logger, Filename, Opts) ->
-    proc_lib:start_link(?MODULE, init, [self(), Name, Logger, Filename, Opts]).
-
-%% private
-close_wait(0) ->
-    [];
-close_wait(N) ->
-    receive
-        {write, Buffer} ->
-            [Buffer | close_wait(N - 1)]
-    after ?CLOSE_TIMEOUT ->
-        []
-    end.
+-spec handle_msg(term(), state()) -> {ok, state()}.
 
 handle_msg(auto_close, #state {
         write_count = 0,
@@ -94,7 +59,7 @@ handle_msg({close, PoolSize, Pid}, #state {
             ?ERROR_MSG("failed to close: ~p~n", [Reason3])
     end,
     Pid ! {fast_disk_log, {closed, Name}},
-    ok = supervisor:terminate_child(?SUPERVISOR, Name);
+    exit(normal);
 handle_msg({write, Buffer}, #state {
         fd = Fd,
         write_count = WriteCount
@@ -110,10 +75,46 @@ handle_msg({write, Buffer}, #state {
             {ok, State}
     end.
 
-loop(State) ->
-    receive Msg ->
-        {ok, State2} = handle_msg(Msg, State),
-        loop(State2)
+-spec init(atom(), pid(), {name(), filename(), open_options()}) -> {ok, state()} | {stop, term()}.
+
+init(Name, Parent, {Logger, Filename, Opts}) ->
+    case file:open(Filename, [append, raw]) of
+        {ok, Fd} ->
+            State = #state {
+                name = Name,
+                fd = Fd,
+                logger = Logger
+            },
+
+            case ?LOOKUP(auto_close, Opts, ?DEFAULT_AUTO_CLOSE) of
+                true ->
+                    AutoCloseDelay = ?ENV(max_delay, ?DEFAULT_MAX_DELAY) * 2,
+                    {ok, State#state {
+                        timer_delay = AutoCloseDelay,
+                        timer_ref = new_timer(AutoCloseDelay, auto_close)
+                    }};
+                false ->
+                    {ok, State}
+            end;
+        {error, Reason} ->
+            ?ERROR_MSG("failed to open file: ~p ~p~n", [Reason, Filename]),
+            {stop, Reason}
+    end.
+
+-spec start_link(atom(), name(), filename(), open_options()) -> {ok, pid()}.
+
+start_link(Name, Logger, Filename, Opts) ->
+    metal:start_link(?MODULE, Name, {Logger, Filename, Opts}).
+
+%% private
+close_wait(0) ->
+    [];
+close_wait(N) ->
+    receive
+        {write, Buffer} ->
+            [Buffer | close_wait(N - 1)]
+    after ?CLOSE_TIMEOUT ->
+        []
     end.
 
 new_timer(Delay, Msg) ->

@@ -20,7 +20,7 @@ close(Name) ->
                 0 -> {error, no_such_log};
                 1 ->
                     msg_buffer_workers(Name, PoolSize, close),
-                    msg_writter_worker(Name, {close, PoolSize, self()}),
+                    msg_writer_worker(Name, {close, PoolSize, self()}),
                     Writer = writer_worker(Name),
                     receive
                         {fast_disk_log, {closed, Writer}} ->
@@ -101,7 +101,7 @@ msg_buffer_worker(Name, N, Msg) ->
 msg_buffer_workers(Name, PoolSize, Msg) ->
     [msg_buffer_worker(Name, N, Msg) || N <- lists:seq(1, PoolSize)].
 
-msg_writter_worker(Name, Msg) ->
+msg_writer_worker(Name, Msg) ->
     writer_worker(Name) ! Msg.
 
 start_buffer_children(_Name, 0) ->

@@ -1,6 +1,6 @@
 %% macros
 -define(APP, fast_disk_log).
--define(CHILD(Name, Mod, Args), {Name, {Mod, start_link, Args}, permanent, 5000, worker, [Mod]}).
+-define(CHILD(Name, Mod, Args), {Name, {Mod, start_link, Args}, transient, 5000, worker, [Mod]}).
 -define(CLOSE_TIMEOUT, 500).
 -define(ENV(Key, Default), fast_disk_log_utils:env(Key, Default)).
 -define(LOOKUP(Key, List), ?LOOKUP(Key, List, undefined)).

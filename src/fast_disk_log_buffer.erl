@@ -2,8 +2,14 @@
 -include("fast_disk_log.hrl").
 
 -export([
-    init/3,
     start_link/2
+]).
+
+-behaviour(metal).
+
+-export([
+    init/3,
+    handle_msg/2
 ]).
 
 -record(state, {
@@ -16,40 +22,39 @@
     writer
 }).
 
+-type state() :: #state{}.
+
 %% public
 -spec init(pid(), atom(), atom()) -> no_return().
 
-init(Parent, Name, Writer) ->
-    register(Name, self()),
-    proc_lib:init_ack(Parent, {ok, self()}),
-
+init(Name, _Parent, Writer) ->
     MaxBufferSize = ?ENV(max_size, ?DEFAULT_MAX_SIZE),
     MaxDelay = ?ENV(max_delay, ?DEFAULT_MAX_DELAY),
 
-    loop(#state {
+    {ok, #state {
         name = Name,
         max_buffer_size = MaxBufferSize,
         max_delay = MaxDelay,
         timer_ref = new_timer(MaxDelay),
         writer = Writer
-    }).
+    }}.
 
 -spec start_link(atom(), atom()) -> {ok, pid()}.
 
 start_link(Name, Writer) ->
-    proc_lib:start_link(?MODULE, init, [self(), Name, Writer]).
+    metal:start_link(?MODULE, Name, Writer).
 
-%% private
+-spec handle_msg(term(), state()) -> {ok, state()}.
+
 handle_msg(close, #state {
         buffer = Buffer,
-        name = Name,
         timer_ref = TimerRef,
         writer = Writer
     }) ->
 
     Writer ! {write, lists:reverse(Buffer)},
     erlang:cancel_timer(TimerRef),
-    ok = supervisor:terminate_child(?SUPERVISOR, Name);
+    exit(normal);
 handle_msg(sync, #state {
         buffer = Buffer,
         writer = Writer
@@ -83,11 +88,7 @@ handle_msg({log, Bin}, #state {
             }}
     end.
 
-loop(State) ->
-    receive Msg ->
-        {ok, State2} = handle_msg(Msg, State),
-        loop(State2)
-    end.
+%% private
 
 new_timer(Time) ->
     erlang:send_after(Time, self(), timeout).
